@@ -100,9 +100,12 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument('builddir', nargs='?', default='.', help='The build directory')
 
 def dump_ast(intr: IntrospectionInterpreter) -> T.Dict[str, T.Any]:
-    printer = AstJSONPrinter()
-    intr.ast.accept(printer)
-    return printer.result
+    result = {}
+    for filename, node in intr.build_files.items():
+        printer = AstJSONPrinter()
+        node.accept(printer)
+        result[filename] = printer.result
+    return result
 
 def list_installed(installdata: backends.InstallData) -> T.Dict[str, str]:
     res = {}
@@ -462,6 +465,7 @@ def run(options: argparse.Namespace) -> int:
     if 'meson.build' in [os.path.basename(options.builddir), options.builddir]:
         # Make sure that log entries in other parts of meson don't interfere with the JSON output
         mlog.disable()
+        mesonlib.setup_vsenv()
         backend = backends.get_backend_from_name(options.backend)
         assert backend is not None
         intr = IntrospectionInterpreter(sourcedir, '', backend.name, visitors = [AstIDGenerator(), AstIndentationGenerator(), AstConditionLevel()])

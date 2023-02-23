@@ -33,6 +33,7 @@ from .interpreter import AstInterpreter
 if T.TYPE_CHECKING:
     from ..build import BuildTarget
     from ..interpreterbase import TYPE_nvar
+    from ..mparser import CodeBlockNode
     from .visitor import AstVisitor
 
 
@@ -83,6 +84,7 @@ class IntrospectionInterpreter(AstInterpreter):
         self.targets = []         # type: T.List[T.Dict[str, T.Any]]
         self.dependencies = []    # type: T.List[T.Dict[str, T.Any]]
         self.project_node = None  # type: BaseNode
+        self.build_files = {}     # type: T.Dict[str, CodeBlockNode]
 
         self.funcs.update({
             'add_languages': self.func_add_languages,
@@ -354,6 +356,11 @@ class IntrospectionInterpreter(AstInterpreter):
 
     def is_subproject(self) -> bool:
         return self.subproject != ''
+
+    def evaluate_codeblock(self, node: CodeBlockNode, start: int = 0, end: T.Optional[int] = None) -> None:
+        relfilename = os.path.relpath(node.filename, self.source_root)
+        self.build_files[relfilename] = node
+        super().evaluate_codeblock(node, start, end)
 
     def analyze(self) -> None:
         self.load_root_meson_file()
