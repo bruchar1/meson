@@ -138,7 +138,10 @@ class InterpreterBase:
             raise InvalidCode('AST is of invalid type. Possibly a bug in the parser.')
         if not self.ast.lines:
             raise InvalidCode('No statements in code.')
-        first = self.ast.lines[0]
+        for first in self.ast.lines:
+            if isinstance(first, mparser.CommentNode):
+                continue
+            break  # The first non-comment node
         if not isinstance(first, mparser.FunctionNode) or first.func_name != 'project':
             p = pathlib.Path(self.source_root).resolve()
             found = p
@@ -242,6 +245,8 @@ class InterpreterBase:
             raise BreakRequest()
         elif isinstance(cur, mparser.TestCaseClauseNode):
             return self.evaluate_testcase(cur)
+        elif isinstance(cur, mparser.CommentNode):
+            return None
         else:
             raise InvalidCode("Unknown statement.")
         return None

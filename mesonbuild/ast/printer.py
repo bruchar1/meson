@@ -54,6 +54,12 @@ class AstPrinter(AstVisitor):
             data = ' ' + data
         self.append(data + ' ', node)
 
+    def append_comment(self, node: mparser.BaseNode) -> None:
+        if node.comment is not None:
+            self.is_newline = False
+            self.append(f'  # {node.comment.strip()}')
+            self.newline()
+
     def newline(self) -> None:
         self.result += '\n'
         self.is_newline = True
@@ -62,15 +68,18 @@ class AstPrinter(AstVisitor):
 
     def visit_BooleanNode(self, node: mparser.BooleanNode) -> None:
         self.append('true' if node.value else 'false', node)
+        self.append_comment(node)
         node.lineno = self.curr_line or node.lineno
 
     def visit_IdNode(self, node: mparser.IdNode) -> None:
         assert isinstance(node.value, str)
         self.append(node.value, node)
+        self.append_comment(node)
         node.lineno = self.curr_line or node.lineno
 
     def visit_NumberNode(self, node: mparser.NumberNode) -> None:
         self.append(str(node.value), node)
+        self.append_comment(node)
         node.lineno = self.curr_line or node.lineno
 
     def escape(self, val: str) -> str:
@@ -80,19 +89,23 @@ class AstPrinter(AstVisitor):
     def visit_StringNode(self, node: mparser.StringNode) -> None:
         assert isinstance(node.value, str)
         self.append("'" + self.escape(node.value) + "'", node)
+        self.append_comment(node)
         node.lineno = self.curr_line or node.lineno
 
     def visit_FormatStringNode(self, node: mparser.FormatStringNode) -> None:
         assert isinstance(node.value, str)
         self.append("f'" + node.value + "'", node)
+        self.append_comment(node)
         node.lineno = self.curr_line or node.lineno
 
     def visit_ContinueNode(self, node: mparser.ContinueNode) -> None:
         self.append('continue', node)
+        self.append_comment(node)
         node.lineno = self.curr_line or node.lineno
 
     def visit_BreakNode(self, node: mparser.BreakNode) -> None:
         self.append('break', node)
+        self.append_comment(node)
         node.lineno = self.curr_line or node.lineno
 
     def visit_ArrayNode(self, node: mparser.ArrayNode) -> None:
@@ -100,12 +113,14 @@ class AstPrinter(AstVisitor):
         self.append('[', node)
         node.args.accept(self)
         self.append(']', node)
+        self.append_comment(node)
 
     def visit_DictNode(self, node: mparser.DictNode) -> None:
         node.lineno = self.curr_line or node.lineno
         self.append('{', node)
         node.args.accept(self)
         self.append('}', node)
+        self.append_comment(node)
 
     def visit_OrNode(self, node: mparser.OrNode) -> None:
         node.left.accept(self)
@@ -161,16 +176,19 @@ class AstPrinter(AstVisitor):
         self.append(node.func_name + '(', node)
         node.args.accept(self)
         self.append(')', node)
+        self.append_comment(node)
 
     def visit_AssignmentNode(self, node: mparser.AssignmentNode) -> None:
         node.lineno = self.curr_line or node.lineno
         self.append(node.var_name + ' = ', node)
         node.value.accept(self)
+        self.append_comment(node)
 
     def visit_PlusAssignmentNode(self, node: mparser.PlusAssignmentNode) -> None:
         node.lineno = self.curr_line or node.lineno
         self.append(node.var_name + ' += ', node)
         node.value.accept(self)
+        self.append_comment(node)
 
     def visit_ForeachClauseNode(self, node: mparser.ForeachClauseNode) -> None:
         node.lineno = self.curr_line or node.lineno
@@ -181,6 +199,7 @@ class AstPrinter(AstVisitor):
         self.newline()
         node.block.accept(self)
         self.append('endforeach', node)
+        self.append_comment(node)
 
     def visit_IfClauseNode(self, node: mparser.IfClauseNode) -> None:
         node.lineno = self.curr_line or node.lineno
@@ -193,6 +212,7 @@ class AstPrinter(AstVisitor):
             self.append('else', node)
             node.elseblock.accept(self)
         self.append('endif', node)
+        self.append_comment(node)
 
     def visit_UMinusNode(self, node: mparser.UMinusNode) -> None:
         node.lineno = self.curr_line or node.lineno
@@ -221,6 +241,7 @@ class AstPrinter(AstVisitor):
                 break_args = True
         if break_args:
             self.newline()
+        self.append_comment(node)
         for i in node.arguments:
             i.accept(self)
             self.append(', ', node)
@@ -237,6 +258,11 @@ class AstPrinter(AstVisitor):
             self.result = re.sub(r', \n$', '\n', self.result)
         else:
             self.result = re.sub(r', $', '', self.result)
+
+    def visit_CommentNode(self, node: mparser.CommentNode) -> None:
+        self.newline()
+        self.append(f'# {node.comment.strip()}')
+
 
 class AstJSONPrinter(AstVisitor):
     def __init__(self) -> None:

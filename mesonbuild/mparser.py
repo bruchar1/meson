@@ -176,8 +176,10 @@ class Lexer:
                     span_end = loc
                     bytespan = (span_start, span_end)
                     match_text = mo.group()
-                    if tid in {'ignore', 'comment'}:
+                    if tid == 'ignore':
                         break
+                    elif tid == 'comment':
+                        value = match_text[1:].rstrip()
                     elif tid == 'lparen':
                         par_count += 1
                     elif tid == 'rparen':
@@ -247,6 +249,7 @@ class BaseNode:
     filename: str
     end_lineno: T.Optional[int] = None
     end_colno: T.Optional[int] = None
+    comment: T.Optional[str] = None
 
     def __post_init__(self) -> None:
         if self.end_lineno is None:
@@ -267,8 +270,8 @@ class BaseNode:
                 func(self)
 
 class ElementaryNode(T.Generic[TV_TokenTypes], BaseNode):
-    def __init__(self, token: Token[TV_TokenTypes]):
-        super().__init__(token.lineno, token.colno, token.filename)
+    def __init__(self, token: Token[TV_TokenTypes], comment: T.Optional[str] = None):
+        super().__init__(token.lineno, token.colno, token.filename, comment=comment)
         self.value = token.value        # type: TV_TokenTypes
         self.bytespan = token.bytespan  # type: T.Tuple[int, int]
 
@@ -317,8 +320,8 @@ class BreakNode(ElementaryNode):
     pass
 
 class ArgumentNode(BaseNode):
-    def __init__(self, token: Token[TV_TokenTypes]):
-        super().__init__(token.lineno, token.colno, token.filename)
+    def __init__(self, token: Token[TV_TokenTypes], comment: T.Optional[str]):
+        super().__init__(token.lineno, token.colno, token.filename, comment=comment)
         self.arguments = []  # type: T.List[BaseNode]
         self.commas = []     # type: T.List[Token[TV_TokenTypes]]
         self.kwargs = {}     # type: T.Dict[BaseNode, BaseNode]
@@ -423,8 +426,8 @@ class MethodNode(BaseNode):
         self.args = args                    # type: ArgumentNode
 
 class FunctionNode(BaseNode):
-    def __init__(self, filename: str, lineno: int, colno: int, end_lineno: int, end_colno: int, func_name: str, args: ArgumentNode):
-        super().__init__(lineno, colno, filename, end_lineno=end_lineno, end_colno=end_colno)
+    def __init__(self, filename: str, lineno: int, colno: int, end_lineno: int, end_colno: int, func_name: str, args: ArgumentNode, comment: T.Optional[str]):
+        super().__init__(lineno, colno, filename, end_lineno=end_lineno, end_colno=end_colno, comment=comment)
         self.func_name = func_name  # type: str
         assert isinstance(func_name, str)
         self.args = args  # type: ArgumentNode
@@ -437,8 +440,8 @@ class AssignmentNode(BaseNode):
         self.value = value  # type: BaseNode
 
 class PlusAssignmentNode(BaseNode):
-    def __init__(self, filename: str, lineno: int, colno: int, var_name: str, value: BaseNode):
-        super().__init__(lineno, colno, filename)
+    def __init__(self, filename: str, lineno: int, colno: int, var_name: str, value: BaseNode, comment: T.Optional[str]):
+        super().__init__(lineno, colno, filename, comment=comment)
         self.var_name = var_name  # type: str
         assert isinstance(var_name, str)
         self.value = value  # type: BaseNode
@@ -479,6 +482,12 @@ class TernaryNode(BaseNode):
         self.condition = condition    # type: BaseNode
         self.trueblock = trueblock    # type: BaseNode
         self.falseblock = falseblock  # type: BaseNode
+
+class CommentNode(ElementaryNode[str]):
+    def __init__(self, token: Token[str]):
+        super().__init__(token)
+        self.comment = token.value
+        self.value = None
 
 if T.TYPE_CHECKING:
     COMPARISONS = Literal['==', '!=', '<', '<=', '>=', '>', 'in', 'notin']
@@ -539,6 +548,12 @@ class Parser:
             return tid
         return ''
 
+    def accept_comment(self) -> T.Optional[str]:
+        value = self.current.value
+        if self.accept('comment'):
+            return value
+        return None
+
     def expect(self, s: str) -> bool:
         if self.accept(s):
             return True
@@ -568,7 +583,8 @@ class Parser:
             if not isinstance(left, IdNode):
                 raise ParseException('Plusassignment target must be an id.', self.getline(), left.lineno, left.colno)
             assert isinstance(left.value, str)
-            return PlusAssignmentNode(left.filename, left.lineno, left.colno, left.value, value)
+            comment = self.accept_comment()
+            return PlusAssignmentNode(left.filename, left.lineno, left.colno, left.value, value, comment)
         elif self.accept('assign'):
             value = self.e1()
             if not isinstance(left, IdNode):
@@ -664,7 +680,8 @@ class Parser:
                 raise ParseException('Function call must be applied to plain id',
                                      self.getline(), left.lineno, left.colno)
             assert isinstance(left.value, str)
-            left = FunctionNode(left.filename, left.lineno, left.colno, self.current.lineno, self.current.colno, left.value, args)
+            comment = self.accept_comment()
+            left = FunctionNode(left.filename, left.lineno, left.colno, self.current.lineno, self.current.colno, left.value, args, comment)
         go_again = True
         while go_again:
             go_again = False
@@ -731,24 +748,30 @@ class Parser:
         return a
 
     def args(self) -> ArgumentNode:
+        comment = self.accept_comment()
         s = self.statement()  # type: BaseNode
-        a = ArgumentNode(self.current)
+        a = ArgumentNode(self.current, comment)
 
         while not isinstance(s, EmptyNode):
             potential = self.current
             if self.accept('comma'):
                 a.commas.append(potential)
+                s.comment = self.accept_comment()
                 a.append(s)
             elif self.accept('colon'):
                 if not isinstance(s, IdNode):
                     raise ParseException('Dictionary key must be a plain identifier.',
                                          self.getline(), s.lineno, s.colno)
-                a.set_kwarg(s, self.statement())
+                v = self.statement()
+                v.comment = self.accept_comment()
+                a.set_kwarg(s, v)
                 potential = self.current
                 if not self.accept('comma'):
+                    a.kwargs[s].comment = self.accept_comment()
                     return a
                 a.commas.append(potential)
             else:
+                s.comment = self.accept_comment()
                 a.append(s)
                 return a
             s = self.statement()
@@ -836,6 +859,8 @@ class Parser:
             return ContinueNode(self.current)
         if self.accept('break'):
             return BreakNode(self.current)
+        if self.accept('comment'):
+            return CommentNode(block_start)
         if self.lexer.in_unit_test and self.accept('testcase'):
             block = self.testcaseblock()
             self.block_expect('endtestcase', block_start)
