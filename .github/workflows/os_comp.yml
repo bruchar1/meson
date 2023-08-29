@@ -52,7 +52,12 @@ jobs:
       # All environment variables are stored inside the docker image in /ci/env_vars.sh
       # They are defined in the `env` section in each image.json. CI_ARGS should be set
       # via the `args` array ub the image.json
-      run: bash -c 'source /ci/env_vars.sh; cd $GITHUB_WORKSPACE; ./run_tests.py --no-unittests --only "frameworks/17 mpi" $CI_ARGS'
+      run: |
+        bash -c 'source /ci/env_vars.sh; cd $GITHUB_WORKSPACE; ./run_tests.py --no-unittests --only "frameworks/17 mpi" $CI_ARGS'
+        bash -c 'source /ci/env_vars.sh; cd $GITHUB_WORKSPACE; ./run_tests.py --no-unittests --only "frameworks/17 mpi" $CI_ARGS'
+        bash -c 'source /ci/env_vars.sh; cd $GITHUB_WORKSPACE; ./run_tests.py --no-unittests --only "frameworks/17 mpi" $CI_ARGS'
+        bash -c 'source /ci/env_vars.sh; cd $GITHUB_WORKSPACE; ./run_tests.py --no-unittests --only "frameworks/17 mpi" $CI_ARGS'
+        bash -c 'source /ci/env_vars.sh; cd $GITHUB_WORKSPACE; ./run_tests.py --no-unittests --only "frameworks/17 mpi" $CI_ARGS'
 
   pypy:
     name: 'Arch / PyPy'
@@ -67,5 +72,9 @@ jobs:
       run: |
         source /ci/env_vars.sh
         export MESON_CI_JOBNAME=$MESON_CI_JOBNAME_UPDATE
+        pypy3 run_tests.py --no-unittests --only "frameworks/17 mpi"
+        pypy3 run_tests.py --no-unittests --only "frameworks/17 mpi"
+        pypy3 run_tests.py --no-unittests --only "frameworks/17 mpi"
+        pypy3 run_tests.py --no-unittests --only "frameworks/17 mpi"
         pypy3 run_tests.py --no-unittests --only "frameworks/17 mpi"
 
