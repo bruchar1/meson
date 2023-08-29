@@ -50,3 +50,4 @@ endif
 if mpic.version() != 'unknown'
   dependency('mpi', version: '>=@0@'.format(mpic.version()), method : method)
 endif
+
